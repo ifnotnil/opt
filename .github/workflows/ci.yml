@@ -1,0 +1,74 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  lint-and-test:
+    name: Lints and Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ '1.22', '1.23' ]
+    steps:
+
+    # https://github.com/actions/checkout
+    - uses: actions/checkout@v4
+
+    # https://github.com/actions/setup-go
+    - name: set up go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "${{ matrix.go-version }}.x"
+        check-latest: true
+        cache: false
+
+    # https://github.com/actions/cache
+    - name: cache tools
+      id: cache-tools
+      uses: actions/cache@v4
+      with:
+        path: |
+          .tools/
+          ~/.cache/go-build
+          ~/go/pkg
+        key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}-${{ hashFiles('**/go.mod', '**/go.sum', '**/Makefile', 'scripts/tools.mk', '.github/workflows/ci.yml') }}
+        restore-keys: |
+          ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}
+
+    - name: install tools
+      # if: steps.cache-tools.outputs.cache-hit != 'true'
+      run: make tools
+
+    - name: env
+      run: |
+        make --version
+        echo ""
+        make env
+
+    - name: make mod
+      run: make ci-mod
+
+    - name: format and check
+      run: make ci-format
+
+    - name: staticcheck
+      run: make staticcheck
+
+    - name: golangci-lint
+      run: make golangci-lint
+
+    - name: Test
+      run: make test
+
+    # https://github.com/codecov/codecov-action
+    # - name: Upload coverage reports to Codecov
+    #   uses: codecov/codecov-action@v5
+    #   env:
+    #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    #   if: matrix.go-version == '1.23' && github.event_name == 'push'

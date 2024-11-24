@@ -1,0 +1,93 @@
+{
+  "cSpell.language": "en,el",
+  "search.exclude": {
+    "**/vendor": true
+  },
+  "go.formatTool": "default",
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": [
+    "--fast"
+  ],
+  "go.lintOnSave": "package",
+  "go.disableConcurrentTests": true,
+  //"go.testTags": "test-e2e",
+  "go.testFlags": [
+    "-count=1",
+    "-parallel=1",
+    "-v",
+    "-race"
+  ],
+  "go.testEnvVars": {
+    //"GOFLAGS": "-modfile=go_test.mod -mod=readonly",
+    "GO111MODULE": "on",
+    "CGO_ENABLED": "1"
+  },
+  "go.testTimeout": "60s",
+  // ~~Language Server~~ https://github.com/golang/tools/blob/master/gopls/doc/settings.md
+  "go.useLanguageServer": true,
+  "gopls": {
+    "build.buildFlags": [
+      "-tags=test-e2e,other",
+    ],
+    "build.env": {
+      //"GOFLAGS": "-modfile=go_test.mod -mod=readonly",
+      "GO111MODULE": "on",
+      "CGO_ENABLED": "0"
+    },
+    "ui.diagnostic.analyses": {
+      // https://github.com/golang/tools/blob/master/gopls/doc/analyzers.md
+      "appends": true,
+      "asmdecl": true,
+      "assign": true,
+      "atomic": true,
+      "atomicalign": true,
+      "bools": true,
+      "buildtag": true,
+      "cgocall": true,
+      "composites": true,
+      "copylocks": true,
+      "deepequalerrors": true,
+      "defers": true,
+      "deprecated": true,
+      "directive": true,
+      "embed": true,
+      "errorsas": true,
+      "fieldalignment": true,
+      "fillreturns": true,
+      "fillstruct": true,
+      "httpresponse": true,
+      "ifaceassert": true,
+      "infertypeargs": true,
+      "loopclosure": true,
+      "lostcancel": true,
+      "nilfunc": true,
+      "nilness": true,
+      "nonewvars": true,
+      "noresultvalues": true,
+      "printf": true,
+      "shadow": true,
+      "shift": true,
+      "simplifycompositelit": true,
+      "simplifyrange": true,
+      "simplifyslice": true,
+      "slog": true,
+      "sortslice": true,
+      "stdmethods": true,
+      "stringintconv": true,
+      "structtag": true,
+      "stubmethods": true,
+      "testinggoroutine": true,
+      "tests": true,
+      "timeformat": true,
+      "undeclaredname": true,
+      "unmarshal": true,
+      "unreachable": true,
+      "unsafeptr": true,
+      "unusedparams": true,
+      "unusedresult": true,
+      "unusedvariable": true,
+      "unusedwrite": true,
+      "useany": true
+    },
+  },
+}

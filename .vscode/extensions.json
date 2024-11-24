@@ -1,0 +1,7 @@
+{
+  // https://go.microsoft.com/fwlink/?LinkId=827846
+  "recommendations": [
+    "golang.go",
+    "streetsidesoftware.code-spell-checker",
+  ]
+}
