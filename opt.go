@@ -14,6 +14,21 @@ var (
 	_ json.Unmarshaler = &Optional[string]{}
 )
 
+func New[T any](item T) Optional[T] {
+	return Optional[T]{
+		Item:      item,
+		isPresent: true,
+		isNil:     false,
+	}
+}
+
+func Nil[T any]() Optional[T] {
+	return Optional[T]{
+		isPresent: true,
+		isNil:     true,
+	}
+}
+
 type Optional[T any] struct {
 	Item      T
 	isPresent bool
@@ -47,7 +62,14 @@ func (e *Optional[T]) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	return json.Unmarshal(data, &e.Item)
+	err := json.Unmarshal(data, &e.Item)
+	if err != nil {
+		e.isNil = false
+		e.isPresent = false
+		return err
+	}
+
+	return nil
 }
 
 var (
@@ -63,6 +85,7 @@ func (e *Optional[T]) Scan(src any) error {
 	n := sql.Null[T]{}
 	err := n.Scan(src)
 	if err != nil {
+		e.isPresent = false
 		return err
 	}
 
@@ -79,7 +102,7 @@ func (e *Optional[T]) Scan(src any) error {
 //	[]byte
 //	string
 //	time.Time
-func (e *Optional[T]) Value() (driver.Value, error) {
+func (e Optional[T]) Value() (driver.Value, error) {
 	if !e.isPresent || e.isNil {
 		return nil, nil //nolint:nilnil
 	}
