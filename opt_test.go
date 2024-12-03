@@ -23,8 +23,10 @@ func TestJsonUnmarshal(t *testing.T) {
 			inputJSONString:  `{"one": 10}`,
 			expectedOptional: Optional[int]{isPresent: true, isNil: false, Item: 10},
 			asserts: func(t *testing.T, o Optional[int]) {
+				val := 10
 				assert.True(t, o.Valid())
-				assert.Equal(t, 10, o.OrElse(100))
+				assert.Equal(t, val, o.OrElse(100))
+				assert.Equal(t, &val, o.Ptr())
 			},
 		},
 		"present and null": {
@@ -33,6 +35,7 @@ func TestJsonUnmarshal(t *testing.T) {
 			asserts: func(t *testing.T, o Optional[int]) {
 				assert.False(t, o.Valid())
 				assert.Equal(t, 100, o.OrElse(100))
+				assert.Nil(t, o.Ptr())
 			},
 		},
 		"not present": {
@@ -41,6 +44,7 @@ func TestJsonUnmarshal(t *testing.T) {
 			asserts: func(t *testing.T, o Optional[int]) {
 				assert.False(t, o.Valid())
 				assert.Equal(t, 100, o.OrElse(100))
+				assert.Nil(t, o.Ptr())
 			},
 		},
 	}
