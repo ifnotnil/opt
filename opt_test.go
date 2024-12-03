@@ -1,6 +1,7 @@
 package opt
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"testing"
 
@@ -15,9 +16,9 @@ func TestJsonUnmarshal(t *testing.T) {
 	}
 
 	tests := map[string]struct {
+		asserts          func(t *testing.T, o Optional[int])
 		inputJSONString  string
 		expectedOptional Optional[int]
-		asserts          func(t *testing.T, o Optional[int])
 	}{
 		"present and not null": {
 			inputJSONString:  `{"one": 10}`,
@@ -61,3 +62,88 @@ func TestJsonUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestSqlValue(t *testing.T) {
+	tests := map[string]struct {
+		optValueFn  func() any
+		expectValue any
+	}{
+		"int64 present not nil": {
+			optValueFn: func() any {
+				return New[int64](42)
+			},
+			expectValue: int64(42),
+		},
+		"int64 present nil": {
+			optValueFn: func() any {
+				return Nil[int64]()
+			},
+			expectValue: nil,
+		},
+		"int64 not present": {
+			optValueFn: func() any {
+				return Optional[int64]{}
+			},
+			expectValue: nil,
+		},
+		"int64 present not nil pointer": {
+			optValueFn: func() any {
+				n := New[int64](42)
+				return n
+			},
+			expectValue: int64(42),
+		},
+		"int64 present nil pointer": {
+			optValueFn: func() any {
+				n := Nil[int64]()
+				return n
+			},
+			expectValue: nil,
+		},
+		"int64 not pointer": {
+			optValueFn: func() any {
+				n := Nil[int64]()
+				return &n
+			},
+			expectValue: nil,
+		},
+
+		"string present not nil": {
+			optValueFn: func() any {
+				return New[string]("test")
+			},
+			expectValue: "test",
+		},
+		"string present nil": {
+			optValueFn: func() any {
+				return Nil[string]()
+			},
+			expectValue: nil,
+		},
+		"string not present": {
+			optValueFn: func() any {
+				return Optional[string]{}
+			},
+			expectValue: nil,
+		},
+
+		"aValuer present not nil": {
+			optValueFn: func() any {
+				return New[aValuer](aValuer{})
+			},
+			expectValue: "value",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, gotErr := driver.DefaultParameterConverter.ConvertValue(tc.optValueFn())
+			require.NoError(t, gotErr)
+			assert.Equal(t, tc.expectValue, got)
+		})
+	}
+}
+
+type aValuer struct{}
+
+func (aValuer) Value() (driver.Value, error) { return "value", nil }

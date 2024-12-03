@@ -107,6 +107,13 @@ func (e Optional[T]) Value() (driver.Value, error) {
 		return nil, nil //nolint:nilnil
 	}
 
+	// if the internal value is also a valuer, call that.
+	// direct type assertion does not work on generics.
+	var a any = e.Item
+	if v, isValuer := (a).(driver.Valuer); isValuer {
+		return v.Value()
+	}
+
 	return e.Item, nil
 }
 
