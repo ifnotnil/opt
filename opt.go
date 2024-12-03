@@ -109,3 +109,11 @@ func (e Optional[T]) Value() (driver.Value, error) {
 
 	return e.Item, nil
 }
+
+func (e Optional[T]) Ptr() *T {
+	if !e.isPresent || e.isNil {
+		return nil
+	}
+
+	return &e.Item
+}
