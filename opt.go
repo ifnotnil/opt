@@ -29,6 +29,13 @@ func Nil[T any]() Optional[T] {
 	}
 }
 
+func None[T any]() Optional[T] {
+	return Optional[T]{
+		isPresent: false,
+		isNil:     false,
+	}
+}
+
 type Optional[T any] struct {
 	Item      T
 	isPresent bool
