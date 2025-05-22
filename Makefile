@@ -5,8 +5,10 @@ SHELL := /usr/bin/env bash
 ## NOTINTERMEDIATE requires make >=4.4
 .NOTINTERMEDIATE:
 
-include $(CURDIR)/scripts/go.mk
-include $(CURDIR)/scripts/tools.mk
+REPO_ROOT = $(CURDIR)
+
+include $(REPO_ROOT)/scripts/go.mk
+include $(REPO_ROOT)/tools/tools.mk
 
 .DEFAULT_GOAL=default
 .PHONY: default
@@ -59,9 +61,13 @@ env:
 checks: vet staticcheck gofumpt goimports golangci-lint
 
 .PHONY: ci-format
-ci-format: goimports gofumpt
-	./scripts/git-check-dirty
+ci-format: golangci-lint-fmt
+	@./scripts/git-check-dirty
 
 .PHONY: ci-mod
 ci-mod: mod
-	./scripts/git-check-dirty
+	@./scripts/git-check-dirty
+
+.PHONY: ci-sh
+ci-sh: shfmt shellcheck
+	@./scripts/git-check-dirty

@@ -1,7 +1,8 @@
 module github.com/ifnotnil/opt
 
-go 1.22
+go 1.23
 
+// Test dependencies. They will not be pushed downstream as indirect ones.
 require github.com/stretchr/testify v1.10.0
 
 require (

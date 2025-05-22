@@ -8,13 +8,14 @@ on:
     branches: [ main ]
 
 jobs:
-
-  lint-and-test:
-    name: Lints and Tests
-    runs-on: ubuntu-latest
+  lint:
+    name: Lint
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [ '1.22', '1.23' ]
+        os: [ 'ubuntu-latest' ]
+        go-version: [ '1.24' ]
+    runs-on: "${{ matrix.os }}"
     steps:
 
     # https://github.com/actions/checkout
@@ -37,25 +38,30 @@ jobs:
           .tools/
           ~/.cache/go-build
           ~/go/pkg
-        key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}-${{ hashFiles('**/go.mod', '**/go.sum', '**/Makefile', 'scripts/tools.mk', '.github/workflows/ci.yml') }}
+        key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}-${{ hashFiles('tools/go.mod', 'tools/tools.mk') }}
         restore-keys: |
           ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}
 
     - name: install tools
-      # if: steps.cache-tools.outputs.cache-hit != 'true'
       run: make tools
 
-    - name: env
+    - name: info
       run: |
         make --version
         echo ""
         make env
 
-    - name: make mod
+    - name: shell files
+      run: make ci-sh
+
+    - name: go mod
       run: make ci-mod
 
-    - name: format and check
+    - name: fmt
       run: make ci-format
+
+    - name: vet
+      run: make vet
 
     - name: staticcheck
       run: make staticcheck
@@ -63,12 +69,69 @@ jobs:
     - name: golangci-lint
       run: make golangci-lint
 
-    - name: Test
-      run: make test
+  test-cover:
+    name: Test With Cover
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ 'ubuntu-latest' ]
+        go-version: [ '1.24' ]
+    runs-on: "${{ matrix.os }}"
+    steps:
+
+    # https://github.com/actions/checkout
+    - uses: actions/checkout@v4
+
+    # https://github.com/actions/setup-go
+    - name: set up go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "${{ matrix.go-version }}.x"
+        check-latest: true
+        cache: false
+
+    - name: test with cover
+      run: |
+        make --version
+        echo ""
+        make env
+        echo ""
+        go test -timeout 60s -race -coverprofile=coverage.txt -covermode=atomic ./...
 
     # https://github.com/codecov/codecov-action
-    # - name: Upload coverage reports to Codecov
-    #   uses: codecov/codecov-action@v5
-    #   env:
-    #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    #   if: matrix.go-version == '1.23' && github.event_name == 'push'
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.txt
+
+  tests:
+    name: Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ 'ubuntu-latest', 'macos-latest', 'windows-latest' ]
+        go-version: [ '1.23', '1.24' ]
+        exclude:
+          # exclude the set that runs in the test-cover
+          - os: 'ubuntu-latest'
+            go-ver: '1.24'
+    runs-on: "${{ matrix.os }}"
+    steps:
+      # https://github.com/actions/checkout
+      - uses: actions/checkout@v4
+
+      # https://github.com/actions/setup-go/
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # go-version-file: ./http/go.mod
+          go-version: "${{ matrix.go-version }}.x"
+          check-latest: true
+          cache: false
+          # cache: true
+          # cache-dependency-path: ./http/go.sum
+
+      - name: go test
+        run: |
+          go test -timeout 60s ./...
