@@ -115,7 +115,7 @@ jobs:
         exclude:
           # exclude the set that runs in the test-cover
           - os: 'ubuntu-latest'
-            go-ver: '1.24'
+            go-version: '1.24'
     runs-on: "${{ matrix.os }}"
     steps:
       # https://github.com/actions/checkout
