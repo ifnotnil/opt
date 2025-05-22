@@ -16,30 +16,47 @@ var (
 
 func New[T any](item T) Optional[T] {
 	return Optional[T]{
-		Item:      item,
-		isPresent: true,
-		isNil:     false,
+		Item:  item,
+		state: StateValid,
 	}
 }
 
 func Nil[T any]() Optional[T] {
 	return Optional[T]{
-		isPresent: true,
-		isNil:     true,
+		state: StateNil,
 	}
 }
 
 func None[T any]() Optional[T] {
 	return Optional[T]{
-		isPresent: false,
-		isNil:     false,
+		state: StateAbsent,
 	}
 }
 
+// State represent the different states of an optional field.
+//   - Absent ([StateAbsent])
+//   - Present but nil ([StateNil])
+//   - Present with value ([StateValid])
+type State int8
+
+const (
+	StateAbsent State = iota // Field is absent
+	StateNil                 // Field is present but nil
+	StateValid               // Field is present with a not nil value
+)
+
 type Optional[T any] struct {
-	Item      T
-	isPresent bool
-	isNil     bool
+	Item  T
+	state State
+}
+
+// Ptr returns a pointer to the inner value if the value is present and not nil. Otherwise it returns nil.
+func (e Optional[T]) Ptr() *T {
+	if e.state == StateValid {
+		return &e.Item
+	}
+
+	return nil
 }
 
 // OrElse checks if the value of Optional struct exists and is not nil,
@@ -52,18 +69,18 @@ func (e Optional[T]) OrElse(d T) T { //nolint:ireturn
 	return d
 }
 
-func (e Optional[T]) Valid() bool   { return e.isPresent && !e.isNil }
-func (e Optional[T]) Nil() bool     { return e.isNil }
-func (e Optional[T]) Present() bool { return e.isPresent }
+func (e Optional[T]) Valid() bool   { return e.state == StateValid }
+func (e Optional[T]) Nil() bool     { return e.state == StateNil }
+func (e Optional[T]) Present() bool { return e.state > StateAbsent }
 
 // MarshalJSON implements the [json.Marshaler] interface.
 // It returns "null" if the value is either absent or nil.
 func (e Optional[T]) MarshalJSON() ([]byte, error) {
-	if !e.isPresent || e.isNil {
-		return nullBytes, nil
+	if e.Valid() {
+		return json.Marshal(e.Item)
 	}
 
-	return json.Marshal(e.Item)
+	return nullBytes, nil
 }
 
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
@@ -71,20 +88,25 @@ func (e Optional[T]) MarshalJSON() ([]byte, error) {
 // If the JSON value of data is null, the soil is set to true.
 // If the [json.Unmarshal] returns error isPresent and isNil are set to false before returning the error.
 func (e *Optional[T]) UnmarshalJSON(data []byte) error {
-	e.isPresent = true
+	e.state = StateNil // state is > Absent
 	if string(bytes.TrimSpace(data)) == nullString {
-		e.isNil = true
 		return nil
 	}
 
 	err := json.Unmarshal(data, &e.Item)
 	if err != nil {
-		e.isNil = false
-		e.isPresent = false
+		e.state = StateAbsent
 		return err
 	}
 
+	e.state = StateValid
+
 	return nil
+}
+
+// IsZero implements the interface used by go 1.24 [encoding/json] marshall when `omitzero` tag is present.
+func (e Optional[T]) IsZero() bool {
+	return e.state == StateAbsent
 }
 
 var (
@@ -95,17 +117,20 @@ var (
 // Scan implements [sql.Scanner] interface. Upon calling this function (e.g. from [sql.Rows] Scan function), the isPresent is set to true.
 // It sets isNil to true if the database value (src) is null, otherwise it sets the value to [Optional.Item] and sets isNil to false.
 func (e *Optional[T]) Scan(src any) error {
-	e.isPresent = true
+	e.state = StateNil // state is > Absent
 
 	// tunnel to sql.Null to use sql.convertAssign
 	n := sql.Null[T]{}
 	err := n.Scan(src)
 	if err != nil {
-		e.isPresent = false
+		e.state = StateAbsent
 		return err
 	}
 
-	e.isNil, e.Item = !n.Valid, n.V
+	if n.Valid {
+		e.state = StateValid
+		e.Item = n.V
+	}
 
 	return nil
 }
@@ -129,7 +154,7 @@ func (e *Optional[T]) Scan(src any) error {
 //
 // It's up to the end-usage of the Optional struct whether this requirement will be met depending on the type of [Optional.Item].
 func (e Optional[T]) Value() (driver.Value, error) {
-	if !e.isPresent || e.isNil {
+	if !e.Valid() {
 		return nil, nil //nolint:nilnil
 	}
 
@@ -141,13 +166,4 @@ func (e Optional[T]) Value() (driver.Value, error) {
 	}
 
 	return e.Item, nil
-}
-
-// Ptr returns a pointer to the inner value if the value is present and not nil. Otherwise it returns nil.
-func (e Optional[T]) Ptr() *T {
-	if !e.isPresent || e.isNil {
-		return nil
-	}
-
-	return &e.Item
 }
