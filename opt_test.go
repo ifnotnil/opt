@@ -3,17 +3,27 @@ package opt
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 //nolint:thelper
-func TestJsonUnmarshal(t *testing.T) {
+func TestJSONUnmarshal(t *testing.T) {
 	type Foo struct {
 		One Optional[int] `json:"one"`
 	}
+
+	t.Run("malformed", func(t *testing.T) {
+		o := Foo{}
+		err := json.Unmarshal([]byte(`{"one": {"a":"b"}}`), &o)
+		require.Error(t, err)
+		assert.False(t, o.One.Valid())
+	})
 
 	tests := map[string]struct {
 		asserts          func(t *testing.T, o Optional[int])
@@ -22,26 +32,27 @@ func TestJsonUnmarshal(t *testing.T) {
 	}{
 		"present and not null": {
 			inputJSONString:  `{"one": 10}`,
-			expectedOptional: Optional[int]{isPresent: true, isNil: false, Item: 10},
+			expectedOptional: Optional[int]{state: StateValid, Item: 10},
 			asserts: func(t *testing.T, o Optional[int]) {
 				val := 10
 				assert.True(t, o.Valid())
 				assert.Equal(t, val, o.OrElse(100))
+				assert.NotNil(t, o.Ptr())
 				assert.Equal(t, &val, o.Ptr())
 			},
 		},
 		"present and null": {
 			inputJSONString:  `{"one": null}`,
-			expectedOptional: Optional[int]{isPresent: true, isNil: true, Item: 0},
+			expectedOptional: Optional[int]{state: StateNil, Item: 0},
 			asserts: func(t *testing.T, o Optional[int]) {
 				assert.False(t, o.Valid())
 				assert.Equal(t, 100, o.OrElse(100))
 				assert.Nil(t, o.Ptr())
 			},
 		},
-		"not present": {
+		"absent": {
 			inputJSONString:  `{"two": 123}`,
-			expectedOptional: Optional[int]{isPresent: false, isNil: false, Item: 0},
+			expectedOptional: Optional[int]{state: StateAbsent, Item: 0},
 			asserts: func(t *testing.T, o Optional[int]) {
 				assert.False(t, o.Valid())
 				assert.Equal(t, 100, o.OrElse(100))
@@ -63,7 +74,97 @@ func TestJsonUnmarshal(t *testing.T) {
 	}
 }
 
-func TestSqlValue(t *testing.T) {
+func TestJSONMarshal(t *testing.T) {
+	type foo struct {
+		One Optional[int] `json:"one"`
+	}
+
+	type fooOmitEmpty struct {
+		One Optional[int] `json:"one,omitempty"`
+	}
+
+	// go 1.24
+	type fooOmitZero struct {
+		One Optional[int] `json:"one,omitzero"`
+	}
+
+	tests := map[string]struct {
+		item         any
+		expectedJSON string
+		goVerGTE     string
+	}{
+		"plain valid": {
+			item: foo{
+				One: New(123),
+			},
+			expectedJSON: `{"one":123}`,
+		},
+		"plain nil": {
+			item: foo{
+				One: Nil[int](),
+			},
+			expectedJSON: `{"one":null}`,
+		},
+		"plain absent": {
+			item: foo{
+				One: None[int](),
+			},
+			expectedJSON: `{"one":null}`,
+		},
+
+		"omit empty valid": {
+			item: fooOmitEmpty{
+				One: New(123),
+			},
+			expectedJSON: `{"one":123}`,
+		},
+		"omit empty nil": {
+			item: fooOmitEmpty{
+				One: Nil[int](),
+			},
+			expectedJSON: `{"one":null}`,
+		},
+		"omit empty absent": {
+			item: fooOmitEmpty{
+				One: None[int](),
+			},
+			expectedJSON: `{"one":null}`,
+		},
+
+		"omit zero valid": {
+			item: fooOmitZero{
+				One: New(123),
+			},
+			expectedJSON: `{"one":123}`,
+			goVerGTE:     "1.24",
+		},
+		"omit zero nil": {
+			item: fooOmitZero{
+				One: Nil[int](),
+			},
+			expectedJSON: `{"one":null}`,
+			goVerGTE:     "1.24",
+		},
+		"omit zero absent": {
+			item: fooOmitZero{
+				One: None[int](),
+			},
+			expectedJSON: `{}`,
+			goVerGTE:     "1.24",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			goVersionGTE(t, tc.goVerGTE)
+			b, err := json.Marshal(tc.item)
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.expectedJSON, string(b))
+		})
+	}
+}
+
+func TestSQLValue(t *testing.T) {
 	tests := map[string]struct {
 		optValueFn  func() any
 		expectValue any
@@ -82,7 +183,7 @@ func TestSqlValue(t *testing.T) {
 		},
 		"int64 not present": {
 			optValueFn: func() any {
-				return Optional[int64]{}
+				return None[int64]()
 			},
 			expectValue: nil,
 		},
@@ -110,7 +211,7 @@ func TestSqlValue(t *testing.T) {
 
 		"string present not nil": {
 			optValueFn: func() any {
-				return New[string]("test")
+				return New("test")
 			},
 			expectValue: "test",
 		},
@@ -122,14 +223,14 @@ func TestSqlValue(t *testing.T) {
 		},
 		"string not present": {
 			optValueFn: func() any {
-				return Optional[string]{}
+				return None[string]()
 			},
 			expectValue: nil,
 		},
 
 		"aValuer present not nil": {
 			optValueFn: func() any {
-				return New[aValuer](aValuer{})
+				return New(aValuer{})
 			},
 			expectValue: "value",
 		},
@@ -147,3 +248,21 @@ func TestSqlValue(t *testing.T) {
 type aValuer struct{}
 
 func (aValuer) Value() (driver.Value, error) { return "value", nil }
+
+func goVersionGTE(t *testing.T, semVerConstraint string) {
+	t.Helper()
+	if semVerConstraint == "" {
+		return
+	}
+
+	versionNum := strings.TrimPrefix(runtime.Version(), "go")
+
+	c, err := semver.NewConstraint(semVerConstraint)
+	require.NoError(t, err, "error on go version constraint")
+
+	c.Check(semver.MustParse(versionNum))
+
+	if !c.Check(semver.MustParse(versionNum)) {
+		t.Skipf("skipping test because of golang version constraint %s for go version %s", semVerConstraint, versionNum)
+	}
+}
