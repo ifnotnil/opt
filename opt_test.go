@@ -91,7 +91,7 @@ func TestJSONMarshal(t *testing.T) {
 	tests := map[string]struct {
 		item         any
 		expectedJSON string
-		goVerGTE     string
+		goVer        string
 	}{
 		"plain valid": {
 			item: foo{
@@ -136,27 +136,27 @@ func TestJSONMarshal(t *testing.T) {
 				One: New(123),
 			},
 			expectedJSON: `{"one":123}`,
-			goVerGTE:     "1.24",
+			goVer:        ">= 1.24",
 		},
 		"omit zero nil": {
 			item: fooOmitZero{
 				One: Nil[int](),
 			},
 			expectedJSON: `{"one":null}`,
-			goVerGTE:     "1.24",
+			goVer:        ">= 1.24",
 		},
 		"omit zero absent": {
 			item: fooOmitZero{
 				One: None[int](),
 			},
 			expectedJSON: `{}`,
-			goVerGTE:     "1.24",
+			goVer:        ">= 1.24",
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			goVersionGTE(t, tc.goVerGTE)
+			goVersionGTE(t, tc.goVer)
 			b, err := json.Marshal(tc.item)
 			require.NoError(t, err)
 			assert.JSONEq(t, tc.expectedJSON, string(b))
@@ -248,6 +248,38 @@ func TestSQLValue(t *testing.T) {
 type aValuer struct{}
 
 func (aValuer) Value() (driver.Value, error) { return "value", nil }
+
+func TestSQLScan(t *testing.T) {
+	t.Run("valid int64", func(t *testing.T) {
+		o := Optional[int64]{}
+		err := o.Scan(int64(123))
+		require.NoError(t, err)
+		require.True(t, o.Present())
+		require.False(t, o.Nil())
+		require.True(t, o.Valid())
+		require.False(t, o.IsZero())
+	})
+
+	t.Run("null int64", func(t *testing.T) {
+		o := Optional[int64]{}
+		err := o.Scan(nil)
+		require.NoError(t, err)
+		require.True(t, o.Present())
+		require.True(t, o.Nil())
+		require.False(t, o.Valid())
+		require.False(t, o.IsZero())
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		o := Optional[int64]{}
+		err := o.Scan(struct{}{})
+		require.Error(t, err)
+		require.False(t, o.Present())
+		require.False(t, o.Nil())
+		require.False(t, o.Valid())
+		require.True(t, o.IsZero())
+	})
+}
 
 func goVersionGTE(t *testing.T, semVerConstraint string) {
 	t.Helper()
