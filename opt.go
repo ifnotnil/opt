@@ -137,33 +137,26 @@ func (e *Optional[T]) Scan(src any) error {
 
 // Value implements [driver.Valuer] interface.
 // If the wrapped value Item implements [driver.Valuer] that Value() function will be called,
-// otherwise it will return the Item directly.
-// [driver.Valuer] mentions that the returned value must be of type:
-//
-//   - [int64]
-//
-//   - [float64]
-//
-//   - [bool]
-//
-//   - [[]byte]
-//
-//   - [string]
-//
-//   - [time.Time]
-//
-// It's up to the end-usage of the Optional struct whether this requirement will be met depending on the type of [Optional.Item].
 func (e Optional[T]) Value() (driver.Value, error) {
 	if !e.Valid() {
 		return nil, nil //nolint:nilnil
 	}
 
+	var val any
+	var err error
+
+	val = e.Item
+
 	// if the internal value is also a valuer, call that.
 	// direct type assertion does not work on generics.
-	var a any = e.Item
-	if v, isValuer := (a).(driver.Valuer); isValuer {
-		return v.Value()
+	if v, isValuer := (any(e.Item)).(driver.Valuer); isValuer {
+		// this could panic if the item is nil pointer,
+		// todo: consider sql.callValuerValue implementation (database/sql/convert.go)
+		val, err = v.Value()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return e.Item, nil
+	return driver.DefaultParameterConverter.ConvertValue(val)
 }
