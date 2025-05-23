@@ -23,7 +23,7 @@ func TestJSONUnmarshal(t *testing.T) {
 		o := Foo{}
 		err := json.Unmarshal([]byte(`{"one": {"a":"b"}}`), &o)
 		require.Error(t, err)
-		assert.False(t, o.One.Valid())
+		assert.False(t, o.One.IsValid())
 	})
 
 	tests := map[string]struct {
@@ -33,10 +33,10 @@ func TestJSONUnmarshal(t *testing.T) {
 	}{
 		"present and not null": {
 			inputJSONString:  `{"one": 10}`,
-			expectedOptional: Optional[int]{state: StateValid, Item: 10},
+			expectedOptional: Optional[int]{state: stateValid, Item: 10},
 			asserts: func(t *testing.T, o Optional[int]) {
 				val := 10
-				assert.True(t, o.Valid())
+				assert.True(t, o.IsValid())
 				assert.Equal(t, val, o.OrElse(100))
 				assert.NotNil(t, o.Ptr())
 				assert.Equal(t, &val, o.Ptr())
@@ -44,18 +44,18 @@ func TestJSONUnmarshal(t *testing.T) {
 		},
 		"present and null": {
 			inputJSONString:  `{"one": null}`,
-			expectedOptional: Optional[int]{state: StateNil, Item: 0},
+			expectedOptional: Optional[int]{state: stateNil, Item: 0},
 			asserts: func(t *testing.T, o Optional[int]) {
-				assert.False(t, o.Valid())
+				assert.False(t, o.IsValid())
 				assert.Equal(t, 100, o.OrElse(100))
 				assert.Nil(t, o.Ptr())
 			},
 		},
-		"absent": {
+		"none": {
 			inputJSONString:  `{"two": 123}`,
-			expectedOptional: Optional[int]{state: StateAbsent, Item: 0},
+			expectedOptional: Optional[int]{state: stateNone, Item: 0},
 			asserts: func(t *testing.T, o Optional[int]) {
-				assert.False(t, o.Valid())
+				assert.False(t, o.IsValid())
 				assert.Equal(t, 100, o.OrElse(100))
 				assert.Nil(t, o.Ptr())
 			},
@@ -106,7 +106,7 @@ func TestJSONMarshal(t *testing.T) {
 			},
 			expectedJSON: `{"one":null}`,
 		},
-		"plain absent": {
+		"plain none": {
 			item: foo{
 				One: None[int](),
 			},
@@ -125,7 +125,7 @@ func TestJSONMarshal(t *testing.T) {
 			},
 			expectedJSON: `{"one":null}`,
 		},
-		"omit empty absent": {
+		"omit empty none": {
 			item: fooOmitEmpty{
 				One: None[int](),
 			},
@@ -146,7 +146,7 @@ func TestJSONMarshal(t *testing.T) {
 			expectedJSON: `{"one":null}`,
 			goVer:        ">= 1.24",
 		},
-		"omit zero absent": {
+		"omit zero none": {
 			item: fooOmitZero{
 				One: None[int](),
 			},
@@ -271,9 +271,9 @@ func TestSQLScan(t *testing.T) {
 		o := Optional[int64]{}
 		err := o.Scan(int64(123))
 		require.NoError(t, err)
-		require.True(t, o.Present())
-		require.False(t, o.Nil())
-		require.True(t, o.Valid())
+		require.True(t, o.IsPresent())
+		require.False(t, o.IsNil())
+		require.True(t, o.IsValid())
 		require.False(t, o.IsZero())
 	})
 
@@ -281,9 +281,9 @@ func TestSQLScan(t *testing.T) {
 		o := Optional[int64]{}
 		err := o.Scan(nil)
 		require.NoError(t, err)
-		require.True(t, o.Present())
-		require.True(t, o.Nil())
-		require.False(t, o.Valid())
+		require.True(t, o.IsPresent())
+		require.True(t, o.IsNil())
+		require.False(t, o.IsValid())
 		require.False(t, o.IsZero())
 	})
 
@@ -291,9 +291,9 @@ func TestSQLScan(t *testing.T) {
 		o := Optional[int64]{}
 		err := o.Scan(struct{}{})
 		require.Error(t, err)
-		require.False(t, o.Present())
-		require.False(t, o.Nil())
-		require.False(t, o.Valid())
+		require.False(t, o.IsPresent())
+		require.False(t, o.IsNil())
+		require.False(t, o.IsValid())
 		require.True(t, o.IsZero())
 	})
 }
@@ -314,4 +314,33 @@ func goVersionGTE(t *testing.T, semVerConstraint string) {
 	if !c.Check(semver.MustParse(versionNum)) {
 		t.Skipf("skipping test because of golang version constraint %s for go version %s", semVerConstraint, versionNum)
 	}
+}
+
+func TestState(t *testing.T) {
+	t.Run("new", func(t *testing.T) {
+		o := New("test")
+		assert.True(t, o.IsValid())
+		assert.False(t, o.IsNil())
+		assert.True(t, o.IsPresent())
+		assert.False(t, o.IsZero())
+		assert.Equal(t, stateValid, o.state)
+	})
+
+	t.Run("nil", func(t *testing.T) {
+		o := Nil[string]()
+		assert.False(t, o.IsValid())
+		assert.True(t, o.IsNil())
+		assert.True(t, o.IsPresent())
+		assert.False(t, o.IsZero())
+		assert.Equal(t, stateNil, o.state)
+	})
+
+	t.Run("none", func(t *testing.T) {
+		o := None[string]()
+		assert.False(t, o.IsValid())
+		assert.False(t, o.IsNil())
+		assert.False(t, o.IsPresent())
+		assert.True(t, o.IsZero())
+		assert.Equal(t, stateNone, o.state)
+	})
 }
