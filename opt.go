@@ -17,42 +17,42 @@ var (
 func New[T any](item T) Optional[T] {
 	return Optional[T]{
 		Item:  item,
-		state: StateValid,
+		state: stateValid,
 	}
 }
 
 func Nil[T any]() Optional[T] {
 	return Optional[T]{
-		state: StateNil,
+		state: stateNil,
 	}
 }
 
 func None[T any]() Optional[T] {
 	return Optional[T]{
-		state: StateAbsent,
+		state: stateNone,
 	}
 }
 
-// State represent the different states of an optional field.
-//   - Absent ([StateAbsent])
-//   - Present but nil ([StateNil])
-//   - Present with value ([StateValid])
-type State int8
+// state represent the different states of an optional field.
+//   - None ([stateNone])
+//   - Present but nil ([stateNil])
+//   - Present with value ([stateValid])
+type state int8
 
 const (
-	StateAbsent State = iota // Field is absent
-	StateNil                 // Field is present but nil
-	StateValid               // Field is present with a not nil value
+	stateNone  state = iota // Field is not preset.
+	stateNil                // Field is present but nil.
+	stateValid              // Field is present with a not nil value.
 )
 
 type Optional[T any] struct {
 	Item  T
-	state State
+	state state
 }
 
 // Ptr returns a pointer to the inner value if the value is present and not nil. Otherwise it returns nil.
 func (e Optional[T]) Ptr() *T {
-	if e.state == StateValid {
+	if e.IsValid() {
 		return &e.Item
 	}
 
@@ -62,21 +62,26 @@ func (e Optional[T]) Ptr() *T {
 // OrElse checks if the value of Optional struct exists and is not nil,
 // if so it returns it, otherwise it returns the given argument d.
 func (e Optional[T]) OrElse(d T) T { //nolint:ireturn
-	if e.Valid() {
+	if e.IsValid() {
 		return e.Item
 	}
 
 	return d
 }
 
-func (e Optional[T]) Valid() bool   { return e.state == StateValid }
-func (e Optional[T]) Nil() bool     { return e.state == StateNil }
-func (e Optional[T]) Present() bool { return e.state > StateAbsent }
+func (e Optional[T]) IsValid() bool   { return e.state == stateValid }
+func (e Optional[T]) IsNil() bool     { return e.state == stateNil }
+func (e Optional[T]) IsPresent() bool { return e.state > stateNone }
+
+// IsZero implements the interface used by go 1.24 [encoding/json] marshall when `omitzero` tag is present.
+func (e Optional[T]) IsZero() bool {
+	return e.state == stateNone
+}
 
 // MarshalJSON implements the [json.Marshaler] interface.
-// It returns "null" if the value is either absent or nil.
+// It returns "null" if the state is either none or nil.
 func (e Optional[T]) MarshalJSON() ([]byte, error) {
-	if e.Valid() {
+	if e.IsValid() {
 		return json.Marshal(e.Item)
 	}
 
@@ -88,25 +93,20 @@ func (e Optional[T]) MarshalJSON() ([]byte, error) {
 // If the JSON value of data is null, the soil is set to true.
 // If the [json.Unmarshal] returns error isPresent and isNil are set to false before returning the error.
 func (e *Optional[T]) UnmarshalJSON(data []byte) error {
-	e.state = StateNil // state is > Absent
+	e.state = stateNil // state is > None
 	if string(bytes.TrimSpace(data)) == nullString {
 		return nil
 	}
 
 	err := json.Unmarshal(data, &e.Item)
 	if err != nil {
-		e.state = StateAbsent
+		e.state = stateNone
 		return err
 	}
 
-	e.state = StateValid
+	e.state = stateValid
 
 	return nil
-}
-
-// IsZero implements the interface used by go 1.24 [encoding/json] marshall when `omitzero` tag is present.
-func (e Optional[T]) IsZero() bool {
-	return e.state == StateAbsent
 }
 
 var (
@@ -117,18 +117,18 @@ var (
 // Scan implements [sql.Scanner] interface. Upon calling this function (e.g. from [sql.Rows] Scan function), the isPresent is set to true.
 // It sets isNil to true if the database value (src) is null, otherwise it sets the value to [Optional.Item] and sets isNil to false.
 func (e *Optional[T]) Scan(src any) error {
-	e.state = StateNil // state is > Absent
+	e.state = stateNil // state is > None
 
 	// tunnel to sql.Null to use sql.convertAssign
 	n := sql.Null[T]{}
 	err := n.Scan(src)
 	if err != nil {
-		e.state = StateAbsent
+		e.state = stateNone
 		return err
 	}
 
 	if n.Valid {
-		e.state = StateValid
+		e.state = stateValid
 		e.Item = n.V
 	}
 
@@ -138,7 +138,7 @@ func (e *Optional[T]) Scan(src any) error {
 // Value implements [driver.Valuer] interface.
 // If the wrapped value Item implements [driver.Valuer] that Value() function will be called.
 func (e Optional[T]) Value() (driver.Value, error) {
-	if !e.Valid() {
+	if !e.IsValid() {
 		return nil, nil //nolint:nilnil
 	}
 
