@@ -35,3 +35,14 @@ type Foo struct {
 | `{}`          | None                  |
 | `{"a": null}` | Nil                   |
 | `{"a": 123}`  | Valid                 |
+
+
+### Why not `Set`?
+We can achieve that by writing the optional value using one of the constructor functions.
+
+```golang
+a := Nil["string")
+// ...
+
+a = New("test")
+```
