@@ -136,7 +136,7 @@ func (e *Optional[T]) Scan(src any) error {
 }
 
 // Value implements [driver.Valuer] interface.
-// If the wrapped value Item implements [driver.Valuer] that Value() function will be called,
+// If the wrapped value Item implements [driver.Valuer] that Value() function will be called.
 func (e Optional[T]) Value() (driver.Value, error) {
 	if !e.Valid() {
 		return nil, nil //nolint:nilnil
