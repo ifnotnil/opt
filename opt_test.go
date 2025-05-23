@@ -3,6 +3,7 @@ package opt
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -166,8 +167,9 @@ func TestJSONMarshal(t *testing.T) {
 
 func TestSQLValue(t *testing.T) {
 	tests := map[string]struct {
-		optValueFn  func() any
-		expectValue any
+		optValueFn     func() any
+		expectValue    any
+		errorAssertion require.ErrorAssertionFunc
 	}{
 		"int64 present not nil": {
 			optValueFn: func() any {
@@ -234,12 +236,23 @@ func TestSQLValue(t *testing.T) {
 			},
 			expectValue: "value",
 		},
+
+		"valuer returns error": {
+			optValueFn: func() any {
+				return New(errorValuer{})
+			},
+			expectValue:    nil,
+			errorAssertion: require.Error,
+		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			got, gotErr := driver.DefaultParameterConverter.ConvertValue(tc.optValueFn())
-			require.NoError(t, gotErr)
+			if tc.errorAssertion == nil {
+				tc.errorAssertion = require.NoError
+			}
+			tc.errorAssertion(t, gotErr)
 			assert.Equal(t, tc.expectValue, got)
 		})
 	}
@@ -248,6 +261,10 @@ func TestSQLValue(t *testing.T) {
 type aValuer struct{}
 
 func (aValuer) Value() (driver.Value, error) { return "value", nil }
+
+type errorValuer struct{}
+
+func (errorValuer) Value() (driver.Value, error) { return nil, errors.New("value error") }
 
 func TestSQLScan(t *testing.T) {
 	t.Run("valid int64", func(t *testing.T) {
