@@ -344,3 +344,38 @@ func TestState(t *testing.T) {
 		assert.Equal(t, stateNone, o.state)
 	})
 }
+
+func TestFirstValid(t *testing.T) {
+	t.Run("no arguments", func(t *testing.T) {
+		result := FirstValid[int]()
+		assert.Equal(t, stateNone, result.state)
+	})
+
+	t.Run("single nil argument", func(t *testing.T) {
+		result := FirstValid(Nil[int]())
+		assert.Equal(t, stateNone, result.state)
+	})
+
+	t.Run("single none argument", func(t *testing.T) {
+		result := FirstValid(None[int]())
+		assert.Equal(t, stateNone, result.state)
+	})
+
+	t.Run("single valid argument", func(t *testing.T) {
+		result := FirstValid(New(42))
+		assert.True(t, result.IsValid())
+		assert.Equal(t, 42, result.Item)
+	})
+
+	t.Run("first valid wins", func(t *testing.T) {
+		result := FirstValid(New(10), New(20), New(30))
+		assert.True(t, result.IsValid())
+		assert.Equal(t, 10, result.Item)
+	})
+
+	t.Run("skip invalid, return first valid", func(t *testing.T) {
+		result := FirstValid(None[string](), Nil[string](), New("hello"), New("world"))
+		assert.True(t, result.IsValid())
+		assert.Equal(t, "hello", result.Item)
+	})
+}

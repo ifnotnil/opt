@@ -160,3 +160,13 @@ func (e Optional[T]) Value() (driver.Value, error) {
 
 	return driver.DefaultParameterConverter.ConvertValue(val)
 }
+
+func FirstValid[T any](o ...Optional[T]) Optional[T] {
+	for _, op := range o {
+		if op.IsValid() {
+			return op
+		}
+	}
+
+	return None[T]()
+}
