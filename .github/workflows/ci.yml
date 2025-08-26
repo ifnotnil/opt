@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ 'ubuntu-latest' ]
-        go-version: [ '1.24' ]
+        go-version: [ '1.25' ]
     runs-on: "${{ matrix.os }}"
     steps:
 
@@ -75,7 +75,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ 'ubuntu-latest' ]
-        go-version: [ '1.24' ]
+        go-version: [ '1.25' ]
     runs-on: "${{ matrix.os }}"
     steps:
 
@@ -111,11 +111,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ 'ubuntu-latest', 'macos-latest', 'windows-latest' ]
-        go-version: [ '1.23', '1.24' ]
+        go-version: [ '1.23', '1.24', '1.25' ]
         exclude:
           # exclude the set that runs in the test-cover
           - os: 'ubuntu-latest'
-            go-version: '1.24'
+            go-version: '1.25'
     runs-on: "${{ matrix.os }}"
     steps:
       # https://github.com/actions/checkout
