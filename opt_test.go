@@ -81,7 +81,7 @@ func TestJSONMarshal(t *testing.T) {
 	}
 
 	type fooOmitEmpty struct {
-		One Optional[int] `json:"one,omitempty"`
+		One Optional[int] `json:"one,omitempty"` //nolint:modernize //omitzero: this is the test indented behavior.
 	}
 
 	// go 1.24
