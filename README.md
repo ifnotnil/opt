@@ -41,7 +41,7 @@ type Foo struct {
 We can achieve that by writing the optional value using one of the constructor functions.
 
 ```golang
-a := Nil["string")
+a := Nil["string"]()
 // ...
 
 a = New("test")
