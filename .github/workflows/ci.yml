@@ -8,79 +8,87 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
-    name: Lint
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ 'ubuntu-latest' ]
-        go-version: [ '1.26' ]
-    runs-on: "${{ matrix.os }}"
+
+  lints:
+    name: Lints
+    runs-on: ubuntu-latest
     steps:
 
     # https://github.com/actions/checkout
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
-    # https://github.com/actions/setup-go
-    - name: set up go
-      uses: actions/setup-go@v6
+    - uses: jdx/mise-action@v4
       with:
-        go-version: "${{ matrix.go-version }}.x"
-        check-latest: true
-        cache: false
+        install: true # [default: true] run `mise install`
+        cache: true # [default: true] cache mise using GitHub's cache
+        experimental: false # [default: false] enable experimental features
+        log_level: debug # [default: info] log level
+        cache_key: "mise-{{platform}}-{{install_args_hash}}-{{file_hash}}"
+
+
+    # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions
+    # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#environment-files
+    - id: go_version
+      name: Get Go version
+      run: |
+        GO_VER=$(go env GOVERSION | cut -d. -f1-2)
+        echo "Detected Go version: ${GO_VER}"
+        echo "GO_VER=${GO_VER}" >> "$GITHUB_OUTPUT"
+
+        GOCACHE=$(go env GOCACHE)
+        echo "Detected GOCACHE: ${GOCACHE}"
+        echo "GOCACHE=${GOCACHE}" >> "$GITHUB_OUTPUT"
+
+        GOPATH=$(go env GOPATH)
+        echo "Detected GOPATH: ${GOPATH}"
+        echo "GOPATH=${GOPATH}" >> "$GITHUB_OUTPUT"
+
 
     # https://github.com/actions/cache
-    - name: cache tools
-      id: cache-tools
-      uses: actions/cache@v5
+    - name: cache go deps
+      id: cache-go
+      uses: actions/cache@v6
       with:
         path: |
-          .tools/
-          ~/.cache/go-build
-          ~/go/pkg
-        key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}-${{ hashFiles('tools/go.mod', 'tools/tools.mk') }}
+          ${{ steps.go_version.outputs.GOCACHE }}
+          ${{ steps.go_version.outputs.GOPATH }}
+        key: ci-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/go.mod', '**/go.sum', '.github/workflows/ci.yml') }}
         restore-keys: |
-          ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ matrix.go-version }}
+          ci-go-${{ runner.os }}-${{ runner.arch }}-
 
-    - name: install tools
-      run: make tools
-
-    - name: info
+    - name: env
       run: |
         make --version
         echo ""
         make env
 
-    - name: shell files
+    - name: check shell files
       run: make ci-sh
 
-    - name: go mod
+    - name: make mod
       run: make ci-mod
 
-    - name: fmt
+    - name: format and check
       run: make ci-format
-
-    - name: vet
-      run: make vet
-
-    - name: staticcheck
-      run: make staticcheck
 
     - name: golangci-lint
       run: make golangci-lint
 
-  test-cover:
-    name: Test With Cover
+  tests:
+    name: Tests
     strategy:
-      fail-fast: false
       matrix:
-        os: [ 'ubuntu-latest' ]
-        go-version: [ '1.26' ]
+        go-version: [ '1.25', '1.26' ]
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        include:
+          - os: 'ubuntu-latest'
+            go-version: '1.26'
+            cover: true
+
     runs-on: "${{ matrix.os }}"
     steps:
-
-    # https://github.com/actions/checkout
-    - uses: actions/checkout@v6
+      # https://github.com/actions/checkout
+    - uses: actions/checkout@v7
 
     # https://github.com/actions/setup-go
     - name: set up go
@@ -90,48 +98,19 @@ jobs:
         check-latest: true
         cache: false
 
-    - name: test with cover
+    - name: test
       run: |
-        make --version
-        echo ""
-        make env
-        echo ""
-        go test -v -timeout 60s -race -coverprofile=coverage.txt -covermode=atomic ./...
+        go test -timeout 30s ./...
+      if: ${{ !matrix.cover }}
+
+    - name: test with cover and race
+      run: |
+        go test -timeout 30s -race -coverprofile=coverage.txt -covermode=atomic ./...
+      if: ${{ matrix.cover }}
 
     # https://github.com/codecov/codecov-action
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v6
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage.txt
-
-  tests:
-    name: Tests
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ 'ubuntu-latest', 'macos-latest', 'windows-latest' ]
-        go-version: [ '1.24', '1.25', '1.26' ]
-        exclude:
-          # exclude the set that runs in the test-cover
-          - os: 'ubuntu-latest'
-            go-version: '1.26'
-    runs-on: "${{ matrix.os }}"
-    steps:
-      # https://github.com/actions/checkout
-      - uses: actions/checkout@v6
-
-      # https://github.com/actions/setup-go/
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          # go-version-file: ./http/go.mod
-          go-version: "${{ matrix.go-version }}.x"
-          check-latest: true
-          cache: false
-          # cache: true
-          # cache-dependency-path: ./http/go.sum
-
-      - name: go test
-        run: |
-          go test -v -timeout 60s ./...
+    - name: upload coverage reports to codecov
+      uses: codecov/codecov-action@v7
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      if: ${{ matrix.cover }}

@@ -5,10 +5,8 @@ SHELL := /usr/bin/env bash
 ## NOTINTERMEDIATE requires make >=4.4
 .NOTINTERMEDIATE:
 
-REPO_ROOT = $(CURDIR)
-
-include $(REPO_ROOT)/scripts/go.mk
-include $(REPO_ROOT)/tools/tools.mk
+include $(CURDIR)/scripts/go.mk
+include $(CURDIR)/scripts/tools.mk
 
 .DEFAULT_GOAL=default
 .PHONY: default
@@ -51,10 +49,10 @@ env:
 	@echo ""
 
 	@echo -e "\e[0;90m>>>\e[0m \e[0;94m Shell \e[0m \e[0;90m<<<\e[0m"
-	@echo "SHELL=$${SHELL}"
-	@echo "BASH=$${BASH}"
-	@echo "BASH_VERSION=$${BASH_VERSION}"
-	@echo "BASH_VERSINFO=$${BASH_VERSINFO}"
+	@echo "SHELL        : $${SHELL}"
+	@echo "BASH         : $${BASH}"
+	@echo "BASH_VERSION : $${BASH_VERSION}"
+	@echo "BASH_VERSINFO: $${BASH_VERSINFO}"
 	@echo ""
 
 .PHONY: checks
